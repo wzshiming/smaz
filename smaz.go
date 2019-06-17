@@ -53,6 +53,9 @@ type Smaz struct {
 }
 
 func NewSmaz(dict []string) *Smaz {
+	if len(dict) >= 255 {
+		panic("The maximum length of supported dictionaries is 254")
+	}
 	var codes = make([][]byte, len(dict))
 	var codeTrie trieNode
 	for i, code := range dict {
