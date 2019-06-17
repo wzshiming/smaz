@@ -1,11 +1,11 @@
 // Package smaz is an implementation of the smaz library
-// (https://github.com/antirez/smaz) for compressing small strings.
+// for compressing small strings.
 package smaz
 
 import "errors"
 
 var (
-	codeStrings = []string{" ",
+	DefaultDict = []string{" ",
 		"the", "e", "t", "a", "of", "o", "and", "i", "n", "s", "e ", "r", " th",
 		" t", "in", "he", "th", "h", "he ", "to", "\r\n", "l", "s ", "d", " a", "an",
 		"er", "c", " o", "d ", "on", " of", "re", "of ", "t ", ", ", "is", "u", "at",
@@ -28,15 +28,40 @@ var (
 		" we", "ly", "ee", " n", "id", " cl", "ac", "il", "</", "rt", " wi", "div",
 		"e, ", " it", "whi", " ma", "ge", "x", "e c", "men", ".com",
 	}
-
-	codes    = make([][]byte, len(codeStrings))
-	codeTrie trieNode
 )
 
-func init() {
-	for i, code := range codeStrings {
+// Default use the library for the default dictionary
+var Default = NewSmaz(DefaultDict)
+
+// Compress compresses a byte slice and returns the compressed data.
+func Compress(input []byte) []byte {
+	return Default.Compress(input)
+}
+
+// Decompress decompresses a smaz-compressed byte slice and return a new slice
+// with the decompressed data.
+// err is nil if and only if decompression fails for any reason
+// (e.g., corrupted data).
+func Decompress(b []byte) ([]byte, error) {
+	return Default.Decompress(b)
+}
+
+// Smaz Is an implementation of Smaz compression
+type Smaz struct {
+	codes    [][]byte
+	codeTrie trieNode
+}
+
+func NewSmaz(dict []string) *Smaz {
+	var codes = make([][]byte, len(dict))
+	var codeTrie trieNode
+	for i, code := range dict {
 		codes[i] = []byte(code)
 		codeTrie.put([]byte(code), byte(i))
+	}
+	return &Smaz{
+		codes:    codes,
+		codeTrie: codeTrie,
 	}
 }
 
@@ -92,14 +117,14 @@ func flushVerb(out, verb []byte) []byte {
 }
 
 // Compress compresses a byte slice and returns the compressed data.
-func Compress(input []byte) []byte {
+func (s *Smaz) Compress(input []byte) []byte {
 	out := make([]byte, 0, len(input)/2) // estimate output size
 	var verb []byte
 
 	for len(input) > 0 {
 		prefixLen := 0
 		var code byte
-		n := &codeTrie
+		n := &s.codeTrie
 		for i, c := range input {
 			next := n.branches[int(c)]
 			if next == nil {
@@ -132,7 +157,7 @@ var ErrDecompression = errors.New("invalid or corrupted compressed data")
 // with the decompressed data.
 // err is nil if and only if decompression fails for any reason
 // (e.g., corrupted data).
-func Decompress(b []byte) ([]byte, error) {
+func (s *Smaz) Decompress(b []byte) ([]byte, error) {
 	dec := make([]byte, 0, len(b)) // estimate initial size
 
 	for len(b) > 0 {
@@ -154,7 +179,7 @@ func Decompress(b []byte) ([]byte, error) {
 			dec = append(dec, b[2:n+2]...)
 			b = b[n+2:]
 		default: // look up encoded value
-			dec = append(dec, codes[int(b[0])]...)
+			dec = append(dec, s.codes[int(b[0])]...)
 			b = b[1:]
 		}
 	}
